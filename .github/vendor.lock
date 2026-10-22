@@ -6,7 +6,7 @@ check-pins.sh rokokol/ci-skill templates/check-pins.sh 2fd1ba2e37b9a1938bee26e20
 .github/workflows/vendor-sync.yml rokokol/ci-skill templates/github/workflows/vendor-sync.yml 2fd1ba2e37b9a1938bee26e204751704de3ce620 a5bde77f98d55a43b2c993f4c96a952e0b68010d manual
 check-sh.sh rokokol/bash-best-practices-skill check-sh.sh 1045482d25b5f2ec63655c62a45ca3961317c00d 37cb4b54dc245288c711b9665c9b4aedc496b1ce
 check-skill.sh rokokol/skill-authoring-skill check-skill.sh 9f431bc8c3f5cbcba09363827c4ca81aec847b21 5d4d4103f7e936fa21736c4d6d14c3fb297e9995
-tests/t.sh rokokol/tests-skill t.sh 47a70e65a77bf5ffd39a5d90f2caefa669eb59fb 5f1f9f634b9d9c689592ec95a196c4734189eb14
+tests/t.sh rokokol/tests-skill t.sh 9fcde010a74664014fdd1bf54cad3dc47b565430 5f7deb30e49cbebca1f0bf0e36ce2c2d481e91af
 tests/markers/ rokokol/tests-skill markers/ 47a70e65a77bf5ffd39a5d90f2caefa669eb59fb 65d141bbf07ecb99a3bd6ebfe4e0d3050a2c1ab4
 check-prose.sh rokokol/create-readme-skill check-prose.sh 613639eb6ec2a73209bb1f7d1ba103e9d1c90db7 0438eca6ca155baf2b5fbbd8157747ec3619b579
 check-changelog.sh rokokol/versioning-skill check-changelog.sh 7b23556ab1c61272ba5ec30c94f91824644b3610 103e3395a394fe6d39b8d7e0989107d9aa01c2e8
