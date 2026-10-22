@@ -120,3 +120,48 @@ defect 'message/auth-top' 'mail_agentd/message.py' \
   '        "authentication": (parsed.get_all("Authentication-Results") or [None])[0],' \
   '        "authentication": (parsed.get_all("Authentication-Results") or [None])[-1],' \
   'the authentication shown is the one the sender wrote into the message, and a forged pass reads as real'
+
+# The session. IMAP defaults mark, renumber and remove more than a request names
+defect 'read/peek' 'mail_agentd/client.py' \
+  '            fetched = session.fetch([uid], ["BODY.PEEK[]"])' \
+  '            fetched = session.fetch([uid], ["BODY[]"])' \
+  'every message the agent reads turns read in the user'\''s own mail client, and they miss it'
+
+defect 'read/since' 'mail_agentd/client.py' \
+  '            return sorted(u for u in found if after is None or u > int(after))' \
+  '            return sorted(found)' \
+  'a watcher shows the last message again on every round when nothing new arrived'
+
+defect 'read/uidvalidity' 'mail_agentd/client.py' \
+  '        if uidvalidity is not None and int(uidvalidity) != current:' \
+  '        if False:' \
+  'after a folder is rebuilt, an action on a remembered message lands on a different message'
+
+defect 'expunge/plain' 'mail_agentd/client.py' \
+  '        session.uid_expunge(list(uids))' \
+  '        session.expunge()' \
+  'removing one message also destroys every message another client had marked deleted'
+
+defect 'expunge/uidplus' 'mail_agentd/client.py' \
+  '        if not session.has_capability("UIDPLUS"):
+            raise Unsupported(
+                f"mailbox {self.config.name}: the server lacks UIDPLUS, and a plain EXPUNGE "' \
+  '        if False:
+            raise Unsupported(
+                f"mailbox {self.config.name}: the server lacks UIDPLUS, and a plain EXPUNGE "' \
+  'on a server without UIDPLUS the removal fails half way and leaves the message marked deleted'
+
+defect 'session/reconnect' 'mail_agentd/client.py' \
+  '                if attempt == 2:' \
+  '                if True:' \
+  'after a dropped connection every request fails until the service restarts'
+
+defect 'session/auth' 'mail_agentd/client.py' \
+  '            raise AuthFailed(f"mailbox {self.config.name}: {refused}") from refused' \
+  '            raise' \
+  'a wrong password is retried forever as if the network had failed, and the server locks the account'
+
+defect 'folder/special' 'mail_agentd/client.py' \
+  '                if flag in flags:' \
+  '                if flag in flags or True:' \
+  'deleted mail lands in whatever folder the server lists first, not in Trash'
