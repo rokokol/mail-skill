@@ -57,7 +57,7 @@ cmd_lint() {
   deadnix --fail
 
   echo "== the python parses"
-  python -m compileall -q mail_agentd tests
+  python -m compileall -q mail_agentd tests mail.py agentsock.py
 
   echo "== no paragraph in the docs is hard-wrapped or ends on a full stop"
   # find rather than git ls-files: this gate also runs in a copy of the tree that holds

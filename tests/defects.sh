@@ -335,3 +335,19 @@ defect 'change/unseen' 'mail_agentd/handler.py' \
   '            await self._call(name, box.set_seen, folder, uids, bool(request.get("seen", True)), uidvalidity=current)' \
   '            await self._call(name, box.set_seen, folder, uids, True, uidvalidity=current)' \
   'a message marked unread by the agent stays read, and the user misses it'
+
+# The client. It shapes requests and remembers what it sent
+defect 'cli/named-only' 'mail.py' \
+  '    request = {key: value for key, value in named.items() if value is not None}' \
+  '    request = dict(named)' \
+  'every request carries every field as null, and the service reads an unnamed folder or limit as given'
+
+defect 'cli/remember' 'mail.py' \
+  '            SENT.remember(options.mailbox, sent)' \
+  '            pass' \
+  'what the agent sends to an own address comes back through the watcher as news, and it may answer itself'
+
+defect 'cli/unread' 'mail.py' \
+  '        request["seen"] = False' \
+  '        request["seen"] = True' \
+  'mark-read --unread marks the message read'
