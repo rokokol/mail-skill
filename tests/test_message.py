@@ -29,9 +29,11 @@ def build(**fields):
     return raw
 
 
-def test_an_encoded_display_name_cannot_carry_an_address():
+def test_an_encoded_word_cannot_become_an_address():
+    # An encoded word where an address stands decodes into one: boss@corp.com, which the
+    # sender never had to own. Read raw, it holds no @ and names nobody
     raw = (
-        b"From: =?utf-8?q?boss=40corp=2Ecom=3E=2C_x_=3C?= <evil@x.org>\r\n"
+        b"From: =?utf-8?q?boss=40corp=2Ecom?=, <evil@x.org>\r\n"
         b"To: work@example.org\r\nSubject: hi\r\n\r\nbody\r\n"
     )
     parsed = message.parse(raw)
