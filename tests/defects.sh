@@ -351,3 +351,38 @@ defect 'cli/unread' 'mail.py' \
   '        request["seen"] = False' \
   '        request["seen"] = True' \
   'mark-read --unread marks the message read'
+
+# The watcher. It follows INBOX by a mark, in a session of its own
+defect 'watch/since' 'mail_agentd/watch.py' \
+  '        new = sorted(u for u in session.search(["UID", f"{self._mark + 1}:*"]) if u > self._mark)' \
+  '        new = sorted(session.search(["UID", f"{self._mark + 1}:*"]))' \
+  'every renewal of IDLE announces the newest message again, and the agent answers it twice'
+
+defect 'watch/mark' 'mail_agentd/watch.py' \
+  '            self._mark = uid' \
+  '            pass' \
+  'every message that ever arrived is announced again on each new one'
+
+defect 'watch/reidle' 'mail_agentd/watch.py' \
+  '            session.idle_check(timeout=self._idle_seconds)' \
+  '            session.idle_check(timeout=None)' \
+  'the server ends a silent IDLE after half an hour, and the watch goes deaf without a word'
+
+defect 'watch/uidvalidity' 'mail_agentd/watch.py' \
+  '        if uidvalidity != self._uidvalidity:
+            # Every UID' \
+  '        if False:
+            # Every UID' \
+  'after INBOX is rebuilt the watcher follows a mark that names other mail, and new messages go unannounced'
+
+defect 'watch/no-idle' 'mail_agentd/watch.py' \
+  '        if not session.has_capability("IDLE"):' \
+  '        if False:' \
+  'on a server without IDLE the watch fails at once in a loop, instead of saying once that nothing is pushed'
+
+defect 'watch/reconnect' 'mail_agentd/watch.py' \
+  '            except client.LOST:
+                self._session = None' \
+  '            except client.LOST:
+                return' \
+  'one dropped connection ends the watch for good, and no new mail is announced until the service restarts'

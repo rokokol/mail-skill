@@ -77,6 +77,10 @@ class Mailbox:
         self._smtp_connect = smtp_connect
         self._session = None
 
+    def open_session(self):
+        """A logged-in session of its own, for a caller that holds it outside the lock."""
+        return self._open()
+
     def _open(self):
         session = self._imap_connect(self.config.imap_host, self.config.imap_port)
         try:
