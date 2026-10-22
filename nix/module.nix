@@ -145,7 +145,21 @@ in
       default = { };
       description = ''
         The mailboxes, by the name the agent and the permission files use. The name is
-        lower-case letters, digits and hyphens
+        lower-case letters, digits and hyphens. Everything here but the passwords lands in
+        the Nix store; configFile keeps the whole of it private instead
+      '';
+    };
+
+    configFile = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      example = "/run/secrets/mail-agent";
+      description = ''
+        A JSON file declaring the mailboxes in place of the mailboxes option, passwords
+        included, for a configuration whose addresses are not to be published: a sops
+        secret, say. systemd hands it to the service as a credential, so it reaches
+        neither the Nix store nor an argument list. Its format is in the repository's
+        references/setup.md
       '';
     };
 
@@ -201,8 +215,8 @@ in
   config = mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.mailboxes != { };
-        message = "services.mail-agent.mailboxes declares no mailbox";
+        assertion = (cfg.mailboxes != { }) != (cfg.configFile != null);
+        message = "services.mail-agent takes its mailboxes from either mailboxes or configFile, and from exactly one";
       }
     ]
     ++ map (name: {
@@ -242,20 +256,26 @@ in
           serviceConfig = {
             ExecStart = lib.concatStringsSep " " [
               (lib.getExe cfg.package)
-              "--mailboxes ${declared}"
+              # %d is the unit's credentials directory, which systemd fills in
+              "--mailboxes ${if cfg.configFile != null then "%d/config" else declared}"
               "--permissions ${cfg.permissionsDir}"
               "--media-dir ${cfg.outboxDir}"
             ];
 
             # The whole reason this is a unit rather than a script. One password serves both
-            # protocols, and the service reads it under two names
+            # protocols, and the service reads it under two names; a private config file
+            # carries its passwords inside and is the one credential
             DynamicUser = true;
-            LoadCredential = lib.concatLists (
-              lib.mapAttrsToList (name: box: [
-                "imap-password-${name}:${box.passwordFile}"
-                "smtp-password-${name}:${box.passwordFile}"
-              ]) cfg.mailboxes
-            );
+            LoadCredential =
+              if cfg.configFile != null then
+                [ "config:${cfg.configFile}" ]
+              else
+                lib.concatLists (
+                  lib.mapAttrsToList (name: box: [
+                    "imap-password-${name}:${box.passwordFile}"
+                    "smtp-password-${name}:${box.passwordFile}"
+                  ]) cfg.mailboxes
+                );
 
             # The outbox is the one path outside the namespace the service may write
             ReadWritePaths = [ cfg.outboxDir ];

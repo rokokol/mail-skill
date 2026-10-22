@@ -56,7 +56,7 @@ services.mail-agent = {
 };
 ```
 
-The module is where the isolation lives, so it ships here rather than being written again by everyone who runs it. [references/setup.md](references/setup.md) says what it provides and what a server must offer
+The module is where the isolation lives, so it ships here rather than being written again by everyone who runs it. A configuration that is itself published can keep its addresses private: `configFile` takes the whole mailbox declaration as one secret file instead. [references/setup.md](references/setup.md) says what the module provides, the format of that file, and what a server must offer
 
 ## How it is arranged
 

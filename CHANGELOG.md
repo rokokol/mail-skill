@@ -13,3 +13,4 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - `mail.py`, the client: `permissions`, `mailboxes`, `list`, `read`, `media`, `send`, `reply`, `forward`, `draft`, `mark-read`, `move`, `delete` and `expunge`
 - `subscribe` and `mail-watch.py`: each new message the grant reaches, pushed as the server announces it over IMAP IDLE, with a catch-up from the last message seen after any gap
 - A NixOS module that runs the service under `DynamicUser` with the passwords as credentials
+- `configFile` on the module: the mailboxes declared in one private JSON file, passwords inside, passed to the service as a credential, so no address reaches the Nix store or a published configuration

@@ -27,6 +27,10 @@
       # system, so the service is tested in one
       checks = forAllSystems (pkgs: {
         vm = import ./nix/vm-test.nix { inherit self pkgs; };
+        vm-private = import ./nix/vm-test.nix {
+          inherit self pkgs;
+          private = true;
+        };
       });
 
       # The pinned toolbox for check.sh, locally and in CI — a linter looked up from a

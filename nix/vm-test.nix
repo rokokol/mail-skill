@@ -1,4 +1,10 @@
-{ self, pkgs }:
+{
+  self,
+  pkgs,
+  # Declare the mailbox through configFile, a private JSON with the password inside,
+  # rather than through the mailboxes option
+  private ? false,
+}:
 
 # The real service, against a real Dovecot and Postfix on the same machine. Nothing here
 # needs the outside network or a person to sign in, so unlike a stand-in this run covers
@@ -57,7 +63,7 @@ let
   queue = "/var/lib/postfix/queue/private";
 in
 pkgs.testers.runNixOSTest {
-  name = "mail-agent";
+  name = if private then "mail-agent-private" else "mail-agent";
 
   nodes.mail = {
     imports = [ self.nixosModules.default ];
@@ -184,13 +190,31 @@ pkgs.testers.runNixOSTest {
       mail-agent = {
         enable = true;
         socketUser = "alice";
-        mailboxes.agent = {
-          address = "agent@${domain}";
-          passwordFile = pkgs.writeText "agent-password" password;
-          imap.host = "mail";
-          ownAddresses = [ "/alias-.*@test\\.local/" ];
-        };
-      };
+      }
+      // (
+        if private then
+          {
+            configFile = pkgs.writeText "mail-agent.json" (
+              builtins.toJSON {
+                agent = {
+                  address = "agent@${domain}";
+                  imap_host = "mail";
+                  inherit password;
+                  own = [ "/alias-.*@test\\.local/" ];
+                };
+              }
+            );
+          }
+        else
+          {
+            mailboxes.agent = {
+              address = "agent@${domain}";
+              passwordFile = pkgs.writeText "agent-password" password;
+              imap.host = "mail";
+              ownAddresses = [ "/alias-.*@test\\.local/" ];
+            };
+          }
+      );
     };
   };
 
@@ -254,7 +278,9 @@ pkgs.testers.runNixOSTest {
           pid = machine.succeed("systemctl show -p MainPID --value mail-agent.service").strip()
           machine.fail(f"tr '\\0' '\\n' < /proc/{pid}/cmdline | grep -F {PASSWORD}")
           machine.fail(f"tr '\\0' '\\n' < /proc/{pid}/environ | grep -F {PASSWORD}")
-          machine.fail(as_alice("cat /run/credentials/mail-agent.service/imap-password-agent"))
+          machine.fail(as_alice("cat /run/credentials/mail-agent.service/${
+            if private then "config" else "imap-password-agent"
+          }"))
 
       with subtest("the permission files belong to root, and the agent's user cannot write them"):
           assert machine.succeed("stat -c '%U %a' ${permissionsDir}/mailboxes").strip() == "root 755"

@@ -10,6 +10,25 @@
 - **A permissions directory**, given with `--permissions`, which the service only reads
 - **An outbox**, given with `--media-dir`, which is the only place a download may land
 
+## A private mailbox file
+
+The NixOS module writes the mailbox file from its `mailboxes` option, and that file lands in the Nix store, readable by every user and published with any public configuration. A configuration whose addresses are not to be published gives `configFile` instead: one JSON file, a secret, passed to the service as a credential with the passwords inside it
+
+```json
+{
+  "work": {
+    "address": "you@example.org",
+    "imap_host": "mail.example.org",
+    "password": "…",
+    "own": ["/.*@example\\.org/"]
+  }
+}
+```
+
+Each key is a mailbox name. `address`, `imap_host` and `password` are required. The login defaults to the address and submission to the IMAP host; `user`, `imap_port`, `smtp_host`, `smtp_port`, `folders`, `append_sent` and `own` override them. A key the service does not know stops it with exit 78, so a misspelt one is never ignored
+
+`own` lists the mailbox's own addresses besides its address, literals or /regex/. On a domain of your own, one pattern for the whole domain covers every alias, those added later included. It is wrong for a shared domain: on a public provider's domain it would make every other user an own address
+
 ## What a server must offer
 
 - **TLS from the first byte**, on IMAP and on submission. The certificate is checked against the system's trust, with no option to turn that off

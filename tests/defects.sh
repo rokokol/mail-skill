@@ -468,3 +468,14 @@ defect 'read/scanned-to' 'mail_agentd/handler.py' \
   '                "scanned_to": examined[-1] if examined else since,' \
   '                "scanned_to": since,' \
   'a watcher behind a page of withheld mail never gets past it'
+
+# A private mailbox file. It carries its own passwords and names only what differs
+defect 'main/written-password' 'mail_agentd/__main__.py' \
+  '            written if written is not None else _password(root, "imap", name),' \
+  '            _password(root, "imap", name),' \
+  'a private mailbox file with its password inside stops the service, asking for a credential that was never meant to exist'
+
+defect 'config/login-default' 'mail_agentd/client.py' \
+  '        fields.setdefault("user", fields.get("address"))' \
+  '        pass' \
+  'a mailbox file that names no login stops the service, though the login is the address everywhere it matters'

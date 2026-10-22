@@ -51,5 +51,5 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
-      - name: nix build .#checks.x86_64-linux.vm
-        run: nix build --no-write-lock-file -L .#checks.x86_64-linux.vm
+      - name: nix build .#checks.x86_64-linux.vm .#checks.x86_64-linux.vm-private
+        run: nix build --no-write-lock-file -L .#checks.x86_64-linux.vm .#checks.x86_64-linux.vm-private
