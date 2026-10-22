@@ -165,3 +165,49 @@ defect 'folder/special' 'mail_agentd/client.py' \
   '                if flag in flags:' \
   '                if flag in flags or True:' \
   'deleted mail lands in whatever folder the server lists first, not in Trash'
+
+# The handler. What it answers is all the agent learns, so what it leaves out matters
+defect 'read/filter' 'mail_agentd/handler.py' \
+  '                if not decision.allowed:
+                    withheld += 1
+                    continue' \
+  '                if False:
+                    withheld += 1
+                    continue' \
+  'a listing shows the sender and subject of every message in the folder, granted or not'
+
+defect 'read/one' 'mail_agentd/handler.py' \
+  '        raw, decision, identity = await self._message(name, box, request, "read")
+        if not decision.allowed:' \
+  '        raw, decision, identity = await self._message(name, box, request, "read")
+        if False:' \
+  'any message is read whole by its UID, whoever wrote it'
+
+defect 'read/own-address' 'mail_agentd/handler.py' \
+  '        return [addresses.parse_rule(box.config.address)] + [' \
+  '        return [] + [' \
+  'the mailbox'\''s own address counts as a second party, and a rule naming it opens every message'
+
+defect 'read/order' 'mail_agentd/handler.py' \
+  '        order = uids[:SCAN] if since is not None else list(reversed(uids))[:SCAN]' \
+  '        order = uids[:SCAN]' \
+  'a listing shows the oldest mail in a folder instead of the newest'
+
+defect 'media/grant' 'mail_agentd/handler.py' \
+  '        raw, decision, identity = await self._message(name, box, request, "media")' \
+  '        raw, decision, identity = await self._message(name, box, request, "read")' \
+  'a grant to read a message also downloads its attachments, which the user granted separately'
+
+defect 'list/grant' 'mail_agentd/handler.py' \
+  '        decision = self._store.grant(name).may_mailbox("list")
+        if not decision.allowed:' \
+  '        decision = self._store.grant(name).may_mailbox("list")
+        if False:' \
+  'the folder names and counts of a mailbox are shown with no grant on it'
+
+defect 'main/password' 'mail_agentd/__main__.py' \
+  '    except FileNotFoundError:
+        _stop(f"no {kind} password for mailbox {name} in the credentials directory")' \
+  '    except FileNotFoundError:
+        return ""' \
+  'a mailbox with no password starts anyway and fails every request, instead of the unit stopping once with the reason'

@@ -111,7 +111,12 @@ def describe(raw, *, full, identity=None):
         # The receiving server prepends its own result, so only the topmost is its word.
         # Anything below came with the message. It is reported, and no grant rests on it
         "authentication": (parsed.get_all("Authentication-Results") or [None])[0],
-        "attachments": [
+        "warnings": warnings,
+    }
+    # A summary is built from the header block alone, which names no attachment
+    if full:
+        described["text"] = _text(raw)
+        described["attachments"] = [
             {
                 "index": index,
                 "name": part.get_filename(),
@@ -119,9 +124,5 @@ def describe(raw, *, full, identity=None):
                 "size": len(part.get_payload(decode=True) or b""),
             }
             for index, part in enumerate(attachments(raw))
-        ],
-        "warnings": warnings,
-    }
-    if full:
-        described["text"] = _text(raw)
+        ]
     return described
