@@ -39,6 +39,13 @@ def test_a_grant_names_the_word_that_allowed_it():
     assert verbs.granted("media", {"read"}, verbs.ACTIONS) is None
 
 
+def test_the_wildcard_grants_only_its_own_table():
+    # A line about mail that arrived at an own address takes message words alone, so
+    # "all" there must never reach send
+    assert verbs.granted("send", {"all"}, verbs.MESSAGE_ACTIONS) is None
+    assert verbs.granted("read", {"all"}, verbs.MESSAGE_ACTIONS) == "all"
+
+
 def test_deleting_and_expunging_are_separate_words():
     assert verbs.granted("expunge", {"delete"}, verbs.ACTIONS) is None
     assert verbs.granted("delete", {"expunge"}, verbs.ACTIONS) is None
