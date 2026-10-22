@@ -78,9 +78,10 @@ def test_a_rule_that_is_no_address_is_an_error():
 
 
 def test_a_slow_regex_on_a_hostile_address_ends_in_an_error():
-    # The regex module defuses the textbook (a+)+, so the alternation is what still explodes
+    # The regex module defuses the textbook (a+)+, so the alternation is what still explodes.
+    # The length is chosen so that a match with no limit still ends, in about a second
     rule = addresses.parse_rule("/(a|aa)+@x/")
     started = time.monotonic()
     with pytest.raises(addresses.RuleTimeout):
-        rule.covers("a" * 40 + "!")
-    assert time.monotonic() - started < 2
+        rule.covers("a" * 33 + "!")
+    assert time.monotonic() - started < 0.5
