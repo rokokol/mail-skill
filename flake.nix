@@ -4,7 +4,7 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       inherit (nixpkgs) lib;
       # systemd holds the secrets, so there is no port to a system without it
@@ -15,6 +15,20 @@
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
+      packages = forAllSystems (pkgs: {
+        default = pkgs.callPackage ./nix/package.nix { };
+      });
+
+      # The unit carries the isolation the service depends on, so it ships here rather
+      # than being written again by every consumer
+      nixosModules.default = import ./nix/module.nix { inherit self; };
+
+      # The module's sandbox and a real IMAP and SMTP server exist only in a booted
+      # system, so the service is tested in one
+      checks = forAllSystems (pkgs: {
+        vm = import ./nix/vm-test.nix { inherit self pkgs; };
+      });
+
       # The pinned toolbox for check.sh, locally and in CI — a linter looked up from a
       # registry at job time makes the run a test of someone else's mirror
       devShells = forAllSystems (pkgs: {
