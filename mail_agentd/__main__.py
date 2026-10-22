@@ -82,7 +82,9 @@ def _password(root, kind, name):
 def mailboxes(path):
     """Every configured mailbox, with its passwords read from systemd's credentials.
 
-    The passwords never reach an argument or the environment of a child process: the
+    A mailbox's password is its `password` field when the file carries one, which is the
+    case for a file that is itself a secret; otherwise it is a credential of its own. The
+    passwords never reach an argument or the environment of a child process: the
     directory is readable only inside this unit's namespace.
     """
     directory = os.environ.get("CREDENTIALS_DIRECTORY")
@@ -105,6 +107,8 @@ def mailboxes(path):
 
     boxes = {}
     for name, fields in declared.items():
+        fields = dict(fields)
+        written = fields.pop("password", None)
         try:
             permissions.as_name(name)
             config = client.MailboxConfig.from_dict(name, fields)
@@ -114,8 +118,8 @@ def mailboxes(path):
             _stop(f"mailbox {name}: {broken}")
         boxes[name] = client.Mailbox(
             config,
-            _password(root, "imap", name),
-            _password(root, "smtp", name),
+            written if written is not None else _password(root, "imap", name),
+            written if written is not None else _password(root, "smtp", name),
             imap_connect,
             smtp_connect,
         )

@@ -63,6 +63,15 @@ class MailboxConfig:
 
     @classmethod
     def from_dict(cls, name, fields):
+        """Read one mailbox as a configuration file declares it.
+
+        A file written by hand names only what differs: the login is the address, and
+        submission goes to the IMAP host, unless it says otherwise. A field the class does
+        not know is a TypeError, so a misspelt key stops the service instead of vanishing.
+        """
+        fields = dict(fields)
+        fields.setdefault("user", fields.get("address"))
+        fields.setdefault("smtp_host", fields.get("imap_host"))
         return cls(name=name, **fields)
 
 

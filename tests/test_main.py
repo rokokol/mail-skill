@@ -49,6 +49,26 @@ def test_mailboxes_are_built_with_their_passwords(tmp_path, monkeypatch):
     assert box._smtp_password == "smtp-secret"
 
 
+def test_a_private_config_carries_its_own_password_and_the_rest_defaults(tmp_path, monkeypatch):
+    # The file a user writes by hand into a secret: only what differs from the defaults
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir()
+    written = {"address": "w@r.art", "imap_host": "mail.r.art", "password": "in-the-file"}
+    box = main.mailboxes(config(tmp_path, work=written))["work"]
+    assert box.config.user == "w@r.art"
+    assert box.config.smtp_host == "mail.r.art"
+    assert (box.config.imap_port, box.config.smtp_port) == (993, 465)
+    assert box._imap_password == box._smtp_password == "in-the-file"
+
+
+def test_a_field_the_service_does_not_know_stops_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(tmp_path))
+    misspelt = {"address": "w@r.art", "imap_host": "m", "password": "x", "imap_hots": "m"}
+    with pytest.raises(SystemExit) as stopped:
+        main.mailboxes(config(tmp_path, work=misspelt))
+    assert stopped.value.code == main.EX_CONFIG
+
+
 def test_a_missing_password_stops_the_service_for_good(tmp_path, monkeypatch):
     credentials = tmp_path / "credentials"
     credentials.mkdir()
