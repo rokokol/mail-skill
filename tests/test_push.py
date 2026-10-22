@@ -11,6 +11,15 @@ import json
 from tests.conftest import mail
 
 
+# A scenario takes milliseconds. A broken guard can leave a stream waiting for a message
+# that never comes, and the deadline turns that into a failure instead of a stalled run
+DEADLINE = 1
+
+
+def following(stream):
+    return asyncio.wait_for(anext(stream), DEADLINE)
+
+
 def header(raw):
     return raw.split(b"\r\n\r\n", 1)[0] + b"\r\n\r\n"
 
@@ -28,7 +37,7 @@ def test_subscribing_needs_read_somewhere_in_the_file(world):
     world.grant("work", "allow boss@corp.com: send\n")
 
     async def scenario(stream):
-        refused = await anext(stream)
+        refused = await following(stream)
         assert refused["ok"] is False and "read" in refused["remedy"]
         assert world.hub.count("work") == 0
 
@@ -40,11 +49,11 @@ def test_a_covered_message_arrives_and_an_uncovered_one_never_does(world):
     world.grant("work", "allow boss@corp.com: read\n")
 
     async def scenario(stream):
-        ack = await anext(stream)
+        ack = await following(stream)
         assert ack["ok"] and ack["result"]["mailbox"] == "work"
         world.hub.publish("work", event(7, mail("stranger@x.org", subject="secret plan")))
         world.hub.publish("work", event(8, mail("boss@corp.com", subject="granted")))
-        arrived = await anext(stream)
+        arrived = await following(stream)
         assert arrived["message"]["uid"] == 8 and arrived["message"]["subject"] == "granted"
         assert arrived["message"]["allowed_by"] == "read"
         assert "secret plan" not in json.dumps(arrived)
@@ -59,10 +68,10 @@ def test_the_grant_is_read_again_for_every_message(world):
     world.grant("work", "allow boss@corp.com: read\n")
 
     async def scenario(stream):
-        await anext(stream)
+        await following(stream)
         world.grant("work", "allow boss@corp.com: send\n")
         world.hub.publish("work", event(9, mail("boss@corp.com", subject="after the change")))
-        ended = await anext(stream)
+        ended = await following(stream)
         assert ended["ok"] is False and "read" in ended["remedy"]
         assert "after the change" not in json.dumps(ended)
 
@@ -74,9 +83,9 @@ def test_a_rebuilt_inbox_is_passed_on(world):
     world.grant("work", "allow boss@corp.com: read\n")
 
     async def scenario(stream):
-        await anext(stream)
+        await following(stream)
         world.hub.publish("work", {"folder": "INBOX", "uidvalidity_changed": 2000})
-        changed = await anext(stream)
+        changed = await following(stream)
         assert changed["ok"] and changed["uidvalidity_changed"] == 2000
 
     run(world, scenario)
@@ -88,10 +97,10 @@ def test_a_subscriber_that_falls_behind_is_cut_off_with_a_reason(world):
     world.hub.depth = 2
 
     async def scenario(stream):
-        await anext(stream)
+        await following(stream)
         for uid in range(3):
             world.hub.publish("work", event(uid + 10, mail("boss@corp.com")))
-        cut = await anext(stream)
+        cut = await following(stream)
         assert cut["ok"] is False and "fell behind" in cut["error"]
 
     run(world, scenario)
@@ -107,7 +116,7 @@ def test_a_mailbox_without_a_watch_refuses_the_subscription(world):
     world.watchers["work"] = Deaf()
 
     async def scenario(stream):
-        refused = await anext(stream)
+        refused = await following(stream)
         assert refused["ok"] is False and "IDLE" in refused["error"]
 
     run(world, scenario)
@@ -118,10 +127,10 @@ def test_a_to_grant_lets_mail_to_that_alias_through(world):
     world.grant("work", "allow to github@example.org: read\n")
 
     async def scenario(stream):
-        await anext(stream)
+        await following(stream)
         world.hub.publish("work", event(3, mail("someone@x.org", to="work@example.org", subject="no")))
         world.hub.publish("work", event(4, mail("bot@github.com", to="github@example.org", subject="ci")))
-        arrived = await anext(stream)
+        arrived = await following(stream)
         assert arrived["message"]["subject"] == "ci"
 
     run(world, scenario)
