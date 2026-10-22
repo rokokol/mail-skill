@@ -35,6 +35,16 @@ def test_a_new_message_is_published_with_its_header_block():
     assert event["uidvalidity"] == server.folders["INBOX"].uidvalidity
 
 
+def test_each_message_is_published_once_across_rounds():
+    server, watcher, published = make()
+    watcher.connect()
+    first = server.deliver(RAW)
+    watcher.step()
+    second = server.deliver(RAW)
+    watcher.step()
+    assert [e["uid"] for _, e in published] == [first, second]
+
+
 def test_a_quiet_round_publishes_nothing_again():
     server, watcher, published = make()
     server.deliver(RAW)
