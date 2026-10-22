@@ -81,8 +81,15 @@ cmd_lint() {
 cmd_behaviour() {
   cd "$ROOT"
   need python
+  # A .pyc is trusted by the second its source was written in and by its size. A defect
+  # planted and taken back within one second, at the same length, leaves the mutant's
+  # bytecode looking fresh, so every run compiles into a cache of its own
+  local cache status=0
+  cache=$(mktemp -d)
   echo "== the service's suite, with no mailbox and no network"
-  python -m pytest tests -q
+  PYTHONPYCACHEPREFIX=$cache python -m pytest tests -q -p no:cacheprovider || status=$?
+  rm -rf "$cache"
+  return "$status"
 }
 
 cmd_all() {
