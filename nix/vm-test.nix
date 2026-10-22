@@ -226,6 +226,7 @@ pkgs.testers.runNixOSTest {
         outboxDir
         outboxGroup
         permissionsDir
+        skill
         socketPath
         ;
     in
@@ -235,8 +236,9 @@ pkgs.testers.runNixOSTest {
 
       DOMAIN = "${domain}"
       PASSWORD = "${password}"
-      MAILPY = "${self}/mail.py"
-      WATCH = "${self}/mail-watch.py"
+      # The clients run out of the skill the module ships, so a file missing from it fails here
+      MAILPY = "${skill}/mail.py"
+      WATCH = "${skill}/mail-watch.py"
 
       def as_alice(command):
           return f"su alice -c {shlex.quote(command)}"
