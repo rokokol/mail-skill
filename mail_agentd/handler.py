@@ -13,6 +13,8 @@ permission file is an answer rather than a crash.
 """
 
 import asyncio
+import email
+import email.policy
 
 from . import addresses, client, compose, media, message, permissions, verbs
 
@@ -23,6 +25,9 @@ MAX_LIMIT = 100
 # years of mail would otherwise be read whole to find twenty messages from one sender
 SCAN = 500
 BATCH = 50
+
+ANSWERED = b"\\Answered"
+DRAFT = b"\\Draft"
 
 
 class BadRequest(ValueError):
@@ -80,6 +85,9 @@ class Handler:
             "read": self._read,
             "media": self._media,
             "send": self._send,
+            "reply": self._reply,
+            "forward": self._forward,
+            "draft": self._draft,
         }.get(action)
         if perform is None:
             return _refused(f"no action is called {action!r}")
@@ -237,6 +245,96 @@ class Handler:
             attached=compose.files(request),
         )
         return await self._submit(name, box, "send", decision, msg, lists)
+
+    async def _reply(self, name, box, request):
+        raw, read, identity = await self._message(name, box, request, "read")
+        if not read.allowed:
+            return _refused(read.reason, remedy=read.remedy)
+        parsed = message.parse(raw)
+        own = self.own_rules(box)
+        # The answer goes where the message asks answers to go, and that is the address
+        # the grant has to cover: Reply-To may point anywhere its writer liked
+        targets = addresses.addresses_in(parsed.get_all("Reply-To", []) or parsed.get_all("From", []))
+        if request.get("all"):
+            targets += message.participants(parsed)
+        counterparts, _ = message.split_own(list(dict.fromkeys(targets)), own)
+        decision = self._store.grant(name).may_recipients("reply", counterparts)
+        if not decision.allowed:
+            return _refused(decision.reason, remedy=decision.remedy)
+        original_id = compose.carried(parsed.get("Message-ID"))
+        references = " ".join(filter(None, [compose.carried(parsed.get("References")), original_id]))
+        subject = compose.carried(message.describe(raw, full=False)["subject"])
+        sender = message.own_reached(parsed, own) or box.config.address
+        msg = compose.build(
+            sender=sender,
+            to=counterparts,
+            cc=[],
+            subject=subject if subject.lower().startswith("re:") else f"Re: {subject}",
+            text=request.get("text", ""),
+            html=request.get("html"),
+            attached=compose.files(request),
+            in_reply_to=original_id or None,
+            references=references or None,
+        )
+        answer = await self._submit(name, box, "reply", decision, msg, {"to": counterparts}, sender=sender)
+        folder, uid, uidvalidity = identity["folder"], identity["uid"], identity["uidvalidity"]
+        await self._call(name, box.set_flag, folder, [uid], ANSWERED, uidvalidity=uidvalidity)
+        # A reply with no read receipt before it is a sequence no person produces, and
+        # only the file can say the user wants the receipt sent
+        if self._store.mailbox_flag(name, "mark-read-on-reply"):
+            await self._call(name, box.set_seen, folder, [uid], True, uidvalidity=uidvalidity)
+        answer["result"]["in_reply_to"] = identity
+        return answer
+
+    async def _forward(self, name, box, request):
+        raw, read, identity = await self._message(name, box, request, "read")
+        if not read.allowed:
+            return _refused(read.reason, remedy=read.remedy)
+        lists = compose.recipients(request)
+        decision = self._store.grant(name).may_recipients("forward", _everyone(lists))
+        if not decision.allowed:
+            return _refused(decision.reason, remedy=decision.remedy)
+        parsed = message.parse(raw)
+        subject = compose.carried(message.describe(raw, full=False)["subject"])
+        original = email.message_from_bytes(raw, policy=email.policy.default)
+        sender = message.own_reached(parsed, self.own_rules(box)) or box.config.address
+        msg = compose.build(
+            sender=sender,
+            to=lists["to"],
+            cc=lists["cc"],
+            subject=subject if subject.lower().startswith("fwd:") else f"Fwd: {subject}",
+            text=request.get("text", ""),
+            extra=[original],
+        )
+        answer = await self._submit(name, box, "forward", decision, msg, lists, sender=sender)
+        answer["result"]["forwarded"] = identity
+        return answer
+
+    async def _draft(self, name, box, request):
+        lists = compose.recipients(request)
+        # A draft the user may later send from their own client without reading it is a
+        # send with a delay, so it is held to every recipient the same way
+        decision = self._store.grant(name).may_recipients("draft", _everyone(lists))
+        if not decision.allowed:
+            return _refused(decision.reason, remedy=decision.remedy)
+        msg = compose.build(
+            sender=box.config.address,
+            to=lists["to"],
+            cc=lists["cc"],
+            draft_bcc=lists["bcc"],
+            subject=request.get("subject", ""),
+            text=request.get("text", ""),
+            html=request.get("html"),
+            attached=compose.files(request),
+        )
+        drafts = await self._call(name, box.special, "drafts")
+        await self._call(name, box.append, drafts, compose.as_bytes(msg), [DRAFT, client.SEEN])
+        return _allowed(
+            decision.by,
+            "draft",
+            {"message_id": msg["Message-ID"], "folder": drafts, **lists},
+            via=decision.via,
+        )
 
     async def _submit(self, name, box, action, decision, msg, lists, sender=None):
         """Send the message to every listed address and file a copy, Bcc nowhere in it.

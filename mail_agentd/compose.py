@@ -64,14 +64,33 @@ def files(request):
     return attached
 
 
-def build(*, sender, to, cc, subject, text, html=None, attached=(), in_reply_to=None, references=None, extra=None):
-    """The message, with a fresh Message-ID in the sender's domain. Bcc is not an argument."""
+def build(
+    *,
+    sender,
+    to,
+    cc,
+    subject,
+    text,
+    html=None,
+    attached=(),
+    in_reply_to=None,
+    references=None,
+    extra=None,
+    draft_bcc=(),
+):
+    """The message, with a fresh Message-ID in the sender's domain.
+
+    Bcc becomes a header only in a draft, which stays in the user's own Drafts until
+    their client sends it, and their client needs it there to know where.
+    """
     msg = EmailMessage(policy=email.policy.SMTP)
     msg["From"] = sender
     if to:
         msg["To"] = ", ".join(to)
     if cc:
         msg["Cc"] = ", ".join(cc)
+    if draft_bcc:
+        msg["Bcc"] = ", ".join(draft_bcc)
     msg["Subject"] = checked(subject, "subject")
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=sender.rpartition("@")[2])
@@ -89,6 +108,14 @@ def build(*, sender, to, cc, subject, text, html=None, attached=(), in_reply_to=
     for part in extra or ():
         msg.add_attachment(part)
     return msg
+
+
+def carried(value):
+    """A header value taken from a received message, unfolded onto one line.
+
+    It came from a stranger, so it is checked like anything the agent writes.
+    """
+    return checked(" ".join(str(value or "").split()), "a carried header")
 
 
 def checked_body(text):

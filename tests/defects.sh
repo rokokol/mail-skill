@@ -251,3 +251,69 @@ defect 'send/after-send' 'mail_agentd/handler.py' \
   '            except ZeroDivisionError as unfiled:
                 warnings.append(f"sent, but no copy was filed in Sent: {unfiled}")' \
   'a missing Sent folder makes a send that already left report failure, and the agent sends it again'
+
+# Answering, forwarding and drafting. The addresses a message will reach are computed here
+defect 'reply/reply-to' 'mail_agentd/handler.py' \
+  '        targets = addresses.addresses_in(parsed.get_all("Reply-To", []) or parsed.get_all("From", []))' \
+  '        targets = addresses.addresses_in(parsed.get_all("From", []))' \
+  'a reply to a message whose Reply-To points elsewhere is checked against From and lands with a stranger, or never reaches the address that asked for it'
+
+defect 'reply/read' 'mail_agentd/handler.py' \
+  '        raw, read, identity = await self._message(name, box, request, "read")
+        if not read.allowed:
+            return _refused(read.reason, remedy=read.remedy)
+        parsed = message.parse(raw)
+        own = self.own_rules(box)' \
+  '        raw, read, identity = await self._message(name, box, request, "read")
+        parsed = message.parse(raw)
+        own = self.own_rules(box)' \
+  'the agent answers, and so quotes, a message it was never allowed to read'
+
+defect 'reply/own' 'mail_agentd/handler.py' \
+  '        counterparts, _ = message.split_own(list(dict.fromkeys(targets)), own)' \
+  '        counterparts, _ = list(dict.fromkeys(targets)), []' \
+  'reply-all writes to the mailbox itself and to its aliases, and the reply comes back as new mail'
+
+defect 'reply/alias' 'mail_agentd/handler.py' \
+  '        sender = message.own_reached(parsed, own) or box.config.address' \
+  '        sender = box.config.address' \
+  'a reply to mail sent to an alias comes from the mailbox behind it, and tells the correspondent the address the alias kept private'
+
+defect 'reply/answered' 'mail_agentd/handler.py' \
+  '        await self._call(name, box.set_flag, folder, [uid], ANSWERED, uidvalidity=uidvalidity)' \
+  '        pass' \
+  'the user'\''s client does not show which messages the agent answered'
+
+defect 'reply/mark-read' 'mail_agentd/handler.py' \
+  '        if self._store.mailbox_flag(name, "mark-read-on-reply"):' \
+  '        if True:' \
+  'every reply marks the message read, though the user never asked for it'
+
+defect 'reply/carried' 'mail_agentd/compose.py' \
+  '    return checked(" ".join(str(value or "").split()), "a carried header")' \
+  '    return str(value or "")' \
+  'a folded References header from a stranger reaches the wire with its line breaks, and the reply is refused or malformed'
+
+defect 'forward/source' 'mail_agentd/handler.py' \
+  '        raw, read, identity = await self._message(name, box, request, "read")
+        if not read.allowed:
+            return _refused(read.reason, remedy=read.remedy)
+        lists = compose.recipients(request)' \
+  '        raw, read, identity = await self._message(name, box, request, "read")
+        lists = compose.recipients(request)' \
+  'any message is sent on to a granted address, whoever wrote it'
+
+defect 'forward/word' 'mail_agentd/handler.py' \
+  '        decision = self._store.grant(name).may_recipients("forward", _everyone(lists))' \
+  '        decision = self._store.grant(name).may_recipients("send", _everyone(lists))' \
+  'a grant to send also forwards, and mail leaves with its origin to anyone the user lets the agent write to'
+
+defect 'draft/checked' 'mail_agentd/handler.py' \
+  '        decision = self._store.grant(name).may_recipients("draft", _everyone(lists))' \
+  '        decision = self._store.grant(name).may_recipients("draft", lists["to"])' \
+  'a draft carries an ungranted Bcc, and the user sends it from their own client without seeing it'
+
+defect 'draft/bcc' 'mail_agentd/handler.py' \
+  '            draft_bcc=lists["bcc"],' \
+  '            draft_bcc=(),' \
+  'the Bcc the agent was allowed to put in a draft is lost, and the user'\''s client sends it without them'
