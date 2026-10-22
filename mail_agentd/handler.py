@@ -216,11 +216,12 @@ class Handler:
         # shown; a plain listing wants the newest
         order = uids[:SCAN] if since is not None else list(reversed(uids))[:SCAN]
         grant = self._store.grant(name)
-        shown, withheld, scanned = [], 0, 0
+        shown, withheld, scanned, examined = [], 0, 0, []
         for start in range(0, len(order), BATCH):
             batch = order[start : start + BATCH]
             fetched = await self._call(name, box.headers, folder, batch, uidvalidity=uidvalidity)
             for uid in batch:
+                examined.append(uid)
                 if uid not in fetched:
                     continue
                 scanned += 1
@@ -256,7 +257,13 @@ class Handler:
                 "messages": shown,
                 "withheld": withheld,
                 "scanned": scanned,
-                "more": scanned < len(uids),
+                "more": len(examined) < len(uids),
+                # Where the look stopped. A catch-up goes on from here, past the messages
+                # it was not shown, or a page of withheld mail would hold it in place
+                "scanned_to": examined[-1] if examined else since,
+                # The highest UID the folder holds, granted or not, so a watcher can start
+                # from now without being shown what came before. It names no message
+                "last_uid": uids[-1] if uids else since,
             },
         )
 

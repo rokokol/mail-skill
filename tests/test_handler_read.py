@@ -101,6 +101,30 @@ def test_reading_since_a_uid_returns_only_newer_mail(world):
     assert [m["subject"] for m in answer["result"]["messages"]] == ["two"]
 
 
+def test_a_listing_names_the_highest_uid_of_the_folder_and_nothing_of_it(world):
+    server = world.mailbox("work", "work@example.org")
+    server.deliver(mail("boss@corp.com", subject="granted"))
+    last = server.deliver(mail("stranger@x.org", subject="secret plan"))
+    world.grant("work", "allow boss@corp.com: read\n")
+    result = world.ask(action="read", mailbox="work", limit=1)["result"]
+    assert result["last_uid"] == last
+    assert [m["subject"] for m in result["messages"]] == ["granted"]
+
+
+def test_a_catch_up_says_where_it_stopped_past_withheld_mail(world, monkeypatch):
+    from mail_agentd import handler
+
+    monkeypatch.setattr(handler, "SCAN", 2)
+    server = world.mailbox("work", "work@example.org")
+    server.deliver(mail("stranger@x.org"))
+    second = server.deliver(mail("stranger@x.org"))
+    server.deliver(mail("boss@corp.com", subject="later"))
+    world.grant("work", "allow boss@corp.com: read\n")
+    result = world.ask(action="read", mailbox="work", since_uid=0)["result"]
+    assert result["messages"] == [] and result["more"] is True
+    assert result["scanned_to"] == second
+
+
 def test_a_limit_keeps_the_newest(world):
     server = world.mailbox("work", "work@example.org")
     for n in range(5):

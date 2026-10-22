@@ -420,3 +420,51 @@ defect 'push/behind' 'mail_agentd/handler.py' \
   '                except ZeroDivisionError:
                     yield _refused(' \
   'a subscriber that fell behind loses messages without being told, and never catches up'
+
+# mail-watch.py. The mark decides what the agent is told, and when
+defect 'follow/dedupe' 'mail-watch.py' \
+  '    if message["uidvalidity"] == mark[0] and message["uid"] <= mark[1]:' \
+  '    if False:' \
+  'a message that lands during the catch-up read is shown twice, once read and once pushed'
+
+defect 'follow/echo' 'mail-watch.py' \
+  '    if message.get("message_id") not in mail.SENT.ids(options.mailbox):' \
+  '    if True:' \
+  'what the agent sent to an own address comes back as news, and it may answer itself'
+
+defect 'follow/state' 'mail-watch.py' \
+  '    if options.state:
+        write_mark(options.state, mark)
+    return mark' \
+  '    return mark' \
+  'a watcher stopped while following resumes from before the messages it already showed, and shows them again'
+
+defect 'follow/rebuilt' 'mail-watch.py' \
+  '    if mark is None or mark[0] != result["uidvalidity"]:' \
+  '    if mark is None:' \
+  'after INBOX is rebuilt the watcher waits for UIDs that will not come for years, and new mail goes unannounced'
+
+defect 'follow/withheld-page' 'mail-watch.py' \
+  '        reached = result["last_uid"] if not result.get("more") else result.get("scanned_to")' \
+  '        reached = result["last_uid"] if not result.get("more") else None' \
+  'a page of mail the grant does not reach holds the catch-up in place, and the watcher asks for it again forever'
+
+defect 'follow/restart' 'mail-watch.py' \
+  '    except OSError as unreachable:
+        print(f"mail-watch.py: {options.socket}: {unreachable}", file=sys.stderr)
+        return mark, False' \
+  '    except OSError as unreachable:
+        raise' \
+  'a watcher ends for good whenever the service restarts, as it does on every system rebuild'
+
+defect 'follow/first-start' 'mail-watch.py' \
+  '        return (result["uidvalidity"], result["last_uid"] or 0)
+    return mark' \
+  '        return (result["uidvalidity"], 0)
+    return mark' \
+  'a first start shows every message the folder ever held as news'
+
+defect 'read/scanned-to' 'mail_agentd/handler.py' \
+  '                "scanned_to": examined[-1] if examined else since,' \
+  '                "scanned_to": since,' \
+  'a watcher behind a page of withheld mail never gets past it'
