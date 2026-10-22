@@ -94,3 +94,29 @@ defect 'permission/timeout' 'mail_agentd/permissions.py' \
             raise
         named' \
   'a slow rule on a hostile From address crashes the request instead of refusing it'
+
+# Messages. What a decision reads comes from the raw headers, and nothing remote is fetched
+defect 'message/decoded-headers' 'mail_agentd/message.py' \
+  '    return email.message_from_bytes(raw, policy=email.policy.compat32)' \
+  '    return email.message_from_bytes(raw, policy=email.policy.default)' \
+  'a display name encoded to spell an address becomes a participant, and a stranger passes as the granted correspondent'
+
+defect 'message/reply-to-participant' 'mail_agentd/message.py' \
+  'PARTICIPANT_HEADERS = ("From", "To", "Cc")' \
+  'PARTICIPANT_HEADERS = ("From", "To", "Cc", "Reply-To")' \
+  'a stranger who names a granted address in Reply-To makes their message readable'
+
+defect 'message/own-split' 'mail_agentd/message.py' \
+  '        (reached if any(rule.covers(address) for rule in own_rules) else counterparts).append(' \
+  '        counterparts.append(' \
+  'the address every message is sent to counts as a second party, and a rule on it opens the whole mailbox'
+
+defect 'message/images' 'mail_agentd/message.py' \
+  '    converter.ignore_images = True' \
+  '    converter.ignore_images = False' \
+  'the text the agent reads carries every tracking pixel as a link it may follow'
+
+defect 'message/auth-top' 'mail_agentd/message.py' \
+  '        "authentication": (parsed.get_all("Authentication-Results") or [None])[0],' \
+  '        "authentication": (parsed.get_all("Authentication-Results") or [None])[-1],' \
+  'the authentication shown is the one the sender wrote into the message, and a forged pass reads as real'
