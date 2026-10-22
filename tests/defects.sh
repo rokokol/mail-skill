@@ -317,3 +317,21 @@ defect 'draft/bcc' 'mail_agentd/handler.py' \
   '            draft_bcc=lists["bcc"],' \
   '            draft_bcc=(),' \
   'the Bcc the agent was allowed to put in a draft is lost, and the user'\''s client sends it without them'
+
+# Changing messages. All of a request or none of it, each message under its own grant
+defect 'change/each' 'mail_agentd/handler.py' \
+  '            if not decision.allowed:
+                return _refused(f"message {uid}: {decision.reason}", remedy=decision.remedy)' \
+  '            if not decision.allowed and uid == uids[0]:
+                return _refused(f"message {uid}: {decision.reason}", remedy=decision.remedy)' \
+  'a request that names one granted message first deletes every message after it, granted or not'
+
+defect 'change/delete-trash' 'mail_agentd/handler.py' \
+  '            await self._call(name, box.trash, folder, uids, uidvalidity=current)' \
+  '            await self._call(name, box.expunge, folder, uids, uidvalidity=current)' \
+  'a delete destroys the message for good, where the user expected to find it in Trash'
+
+defect 'change/unseen' 'mail_agentd/handler.py' \
+  '            await self._call(name, box.set_seen, folder, uids, bool(request.get("seen", True)), uidvalidity=current)' \
+  '            await self._call(name, box.set_seen, folder, uids, True, uidvalidity=current)' \
+  'a message marked unread by the agent stays read, and the user misses it'

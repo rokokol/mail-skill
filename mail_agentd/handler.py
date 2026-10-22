@@ -88,6 +88,10 @@ class Handler:
             "reply": self._reply,
             "forward": self._forward,
             "draft": self._draft,
+            "mark-read": self._change,
+            "move": self._change,
+            "delete": self._change,
+            "expunge": self._change,
         }.get(action)
         if perform is None:
             return _refused(f"no action is called {action!r}")
@@ -245,6 +249,51 @@ class Handler:
             attached=compose.files(request),
         )
         return await self._submit(name, box, "send", decision, msg, lists)
+
+    async def _change(self, name, box, request):
+        """Mark, move, delete or expunge messages: all of them, or none when one is out of reach."""
+        action = request["action"]
+        folder = _folder(request)
+        uids = request.get("uids")
+        if uids is None and request.get("uid") is not None:
+            uids = [request["uid"]]
+        try:
+            uids = [int(u) for u in uids or []]
+        except (TypeError, ValueError):
+            raise BadRequest("uids is a list of numbers") from None
+        if not uids:
+            raise BadRequest(f"{action} names no uid")
+        target = request.get("to_folder")
+        if action == "move" and not (isinstance(target, str) and target):
+            raise BadRequest("move names no to_folder")
+        current = await self._call(name, box.uidvalidity, folder)
+        uidvalidity = request.get("uidvalidity")
+        if uidvalidity is not None and int(uidvalidity) != current:
+            raise client.Moved(
+                f"folder {folder} was rebuilt: its UIDVALIDITY is {current}, not {uidvalidity}, "
+                f"so its identifiers name other messages now"
+            )
+        fetched = await self._call(name, box.headers, folder, uids, uidvalidity=current)
+        gone = [u for u in uids if u not in fetched]
+        if gone:
+            raise BadRequest(f"folder {folder} holds no message {', '.join(map(str, gone))}")
+        grant = self._store.grant(name)
+        words = set()
+        for uid in uids:
+            decision = self.decide(grant, action, fetched[uid]["header"], box)
+            if not decision.allowed:
+                return _refused(f"message {uid}: {decision.reason}", remedy=decision.remedy)
+            words.add(decision.by)
+        if action == "mark-read":
+            await self._call(name, box.set_seen, folder, uids, bool(request.get("seen", True)), uidvalidity=current)
+        elif action == "move":
+            await self._call(name, box.move, folder, uids, target, uidvalidity=current)
+        elif action == "delete":
+            await self._call(name, box.trash, folder, uids, uidvalidity=current)
+        else:
+            await self._call(name, box.expunge, folder, uids, uidvalidity=current)
+        by = verbs.WILDCARD if verbs.WILDCARD in words else action
+        return _allowed(by, action, {"mailbox": name, "folder": folder, "uids": uids, "uidvalidity": current})
 
     async def _reply(self, name, box, request):
         raw, read, identity = await self._message(name, box, request, "read")
