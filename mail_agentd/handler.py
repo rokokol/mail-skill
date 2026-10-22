@@ -14,7 +14,7 @@ permission file is an answer rather than a crash.
 
 import asyncio
 
-from . import addresses, client, media, message, permissions, verbs
+from . import addresses, client, compose, media, message, permissions, verbs
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
@@ -46,7 +46,7 @@ class Handler:
     async def handle(self, request):
         try:
             return await self._dispatch(request)
-        except (permissions.BadName, UnknownMailbox, BadRequest) as bad:
+        except (permissions.BadName, UnknownMailbox, BadRequest, compose.BadMessage) as bad:
             return _refused(str(bad))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
@@ -79,6 +79,7 @@ class Handler:
             "list": self._list,
             "read": self._read,
             "media": self._media,
+            "send": self._send,
         }.get(action)
         if perform is None:
             return _refused(f"no action is called {action!r}")
@@ -221,6 +222,46 @@ class Handler:
             decision.by, "media", {**identity, "files": files, "missing": missing}, via=decision.via
         )
 
+    async def _send(self, name, box, request):
+        lists = compose.recipients(request)
+        decision = self._store.grant(name).may_recipients("send", _everyone(lists))
+        if not decision.allowed:
+            return _refused(decision.reason, remedy=decision.remedy)
+        msg = compose.build(
+            sender=box.config.address,
+            to=lists["to"],
+            cc=lists["cc"],
+            subject=request.get("subject", ""),
+            text=request.get("text", ""),
+            html=request.get("html"),
+            attached=compose.files(request),
+        )
+        return await self._submit(name, box, "send", decision, msg, lists)
+
+    async def _submit(self, name, box, action, decision, msg, lists, sender=None):
+        """Send the message to every listed address and file a copy, Bcc nowhere in it.
+
+        The copy is filed after the send, and a copy that cannot be filed is a warning,
+        not a failure: the message has already left, and saying otherwise would invite a
+        second send.
+        """
+        raw = compose.as_bytes(msg)
+        sender = sender or box.config.address
+        await self._call(name, box.send, sender, _everyone(lists), raw)
+        warnings = []
+        if box.config.append_sent:
+            try:
+                sent = await self._call(name, box.special, "sent")
+                await self._call(name, box.append, sent, raw, [client.SEEN])
+            except (client.NoFolder, *client.LOST) as unfiled:
+                warnings.append(f"sent, but no copy was filed in Sent: {unfiled}")
+        return _allowed(
+            decision.by,
+            action,
+            {"message_id": msg["Message-ID"], "from": sender, **lists, "warnings": warnings},
+            via=decision.via,
+        )
+
 
 def _folder(request):
     folder = request.get("folder", "INBOX")
@@ -237,6 +278,16 @@ def _integer(request, key, default):
         return int(value)
     except (TypeError, ValueError):
         raise BadRequest(f"{key} is a number, not {value!r}") from None
+
+
+def _everyone(lists):
+    """Every recipient once, in To, Cc, Bcc order."""
+    seen = []
+    for field in ("to", "cc", "bcc"):
+        for address in lists.get(field, []):
+            if address not in seen:
+                seen.append(address)
+    return seen
 
 
 def _identity(name, folder, uid, uidvalidity):

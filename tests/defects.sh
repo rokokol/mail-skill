@@ -211,3 +211,43 @@ defect 'main/password' 'mail_agentd/__main__.py' \
   '    except FileNotFoundError:
         return ""' \
   'a mailbox with no password starts anyway and fails every request, instead of the unit stopping once with the reason'
+
+# Sending. What leaves cannot be called back, so every check happens before the send
+defect 'send/crlf' 'mail_agentd/compose.py' \
+  '    if any(c in value for c in FORBIDDEN):' \
+  '    if False:' \
+  'a subject with a line break writes a header of its own, a Bcc to anyone among them'
+
+defect 'send/bcc-leak' 'mail_agentd/handler.py' \
+  '            cc=lists["cc"],
+            subject=request.get("subject", ""),' \
+  '            cc=lists["cc"] + lists["bcc"],
+            subject=request.get("subject", ""),' \
+  'every recipient and the copy in Sent show who was meant to receive the message unseen'
+
+defect 'send/bcc-checked' 'mail_agentd/handler.py' \
+  '        decision = self._store.grant(name).may_recipients("send", _everyone(lists))' \
+  '        decision = self._store.grant(name).may_recipients("send", lists["to"] + lists["cc"])' \
+  'one granted address in To carries any stranger in Bcc, and the user never sees who received it'
+
+defect 'send/envelope' 'mail_agentd/handler.py' \
+  '        await self._call(name, box.send, sender, _everyone(lists), raw)' \
+  '        await self._call(name, box.send, sender, lists["to"] + lists["cc"], raw)' \
+  'a Bcc recipient the user granted never receives the message, and the answer says it was sent'
+
+defect 'send/bare-address' 'mail_agentd/compose.py' \
+  '    if len(found) != 1 or addresses.canonical(text) != found[0]:' \
+  '    if not found:' \
+  'a recipient written as a list sends to every address in it, though only the first was checked'
+
+defect 'send/sent-copy' 'mail_agentd/handler.py' \
+  '                await self._call(name, box.append, sent, raw, [client.SEEN])' \
+  '                pass' \
+  'what the agent sends never appears in Sent, so the user cannot see it from their own client'
+
+defect 'send/after-send' 'mail_agentd/handler.py' \
+  '            except (client.NoFolder, *client.LOST) as unfiled:
+                warnings.append(f"sent, but no copy was filed in Sent: {unfiled}")' \
+  '            except ZeroDivisionError as unfiled:
+                warnings.append(f"sent, but no copy was filed in Sent: {unfiled}")' \
+  'a missing Sent folder makes a send that already left report failure, and the agent sends it again'
