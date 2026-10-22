@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# The gate for this repository, run locally and by .github/workflows/build.yml. The lint
+# half holds the scripts, the workflows, the flake and the documents to their rules; the
+# behaviour half runs the service's own suite against stand-ins for IMAP and SMTP, so
+# nothing here reaches the network or a mailbox
+
+set -euo pipefail
+
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ROOT=$(CDPATH= cd -- "$HERE/.." && pwd)
+
+usage() {
+  cat <<'EOF'
+check.sh — the gate for the mail skill
+
+Usage: check.sh [all | lint | behaviour]
+
+  check.sh all         both halves, in order (the default)
+  check.sh lint        the vendored checkers, the workflows, the flake and the documents
+  check.sh behaviour   the service's suite, against stand-ins for IMAP and SMTP
+
+Exit codes:
+  0  everything holds
+  1  a check found something
+  2  usage, or a tool the gate needs is missing
+EOF
+}
+
+die() {
+  printf 'check: %s\n' "$*" >&2
+  exit 2
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "needs $1 — nix develop -c is where the pinned ones live"
+}
+
+cmd_lint() {
+  cd "$ROOT"
+  for tool in shellcheck shfmt actionlint nixfmt statix deadnix jq python; do need "$tool"; done
+
+  echo "== the vendored copies are byte-equal to their source"
+  ./vendor-sync.sh check
+
+  echo "== the scripts parse and lint"
+  ./check-sh.sh tests/check.sh
+
+  echo "== the workflows are valid, and their tools come from the lock rather than a registry"
+  actionlint
+  ./check-pins.sh
+
+  echo "== the Nix here is formatted, and says nothing it does not mean"
+  local nix_files=()
+  while IFS= read -r file; do nix_files+=("$file"); done < <(find . -name '*.nix' -type f -not -path '*/.git/*' | sort)
+  nixfmt --check "${nix_files[@]}"
+  statix check
+  deadnix --fail
+
+  echo "== the python parses"
+  python -m compileall -q mail_agentd tests
+
+  echo "== no paragraph in the docs is hard-wrapped or ends on a full stop"
+  # find rather than git ls-files: this gate also runs in a copy of the tree that holds
+  # no .git, where the list would come out empty and every document would pass
+  local docs=()
+  while IFS= read -r doc; do docs+=("$doc"); done < <(
+    find . -name '*.md' -type f \
+      -not -path '*/.git/*' \
+      -not -path './falsify.out/*' \
+      -not -path './.pytest_cache/*' | sort
+  )
+  ./check-prose.sh "${docs[@]}"
+
+  echo "== SKILL.md loads, every reference is reachable, and every link resolves"
+  ./check-skill.sh -n mail
+
+  echo "== the changelog obeys the versioning skill's rules"
+  ./check-changelog.sh CHANGELOG.md
+}
+
+cmd_behaviour() {
+  cd "$ROOT"
+  need python
+  echo "== the service's suite, with no mailbox and no network"
+  python -m pytest tests -q
+}
+
+cmd_all() {
+  cmd_lint
+  cmd_behaviour
+  printf '\ncheck: everything holds\n'
+}
+
+cmd=${1:-all}
+case $cmd in
+  all) cmd_all ;;
+  lint) cmd_lint ;;
+  behaviour) cmd_behaviour ;;
+  -h | --help | help) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

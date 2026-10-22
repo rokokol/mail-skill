@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mail-agentd"
+version = "0"
+description = "Serve mailboxes over a unix socket under per-mailbox, per-address permissions"
+# email.utils.getaddresses turned strict in 3.13: a header it cannot parse yields an empty
+# address instead of a guess, and every decision here rests on that
+requires-python = ">=3.13"
+dependencies = ["imapclient", "html2text", "regex"]
+
+[project.scripts]
+mail-agentd = "mail_agentd.__main__:main"
+
+[tool.setuptools]
+packages = ["mail_agentd"]

@@ -1,0 +1,16 @@
+# Git copies and URL pins are recorded here; vendor-sync.sh help describes each line
+# Never edit a copy in place: change its source and let the cascade bring it back. How it
+# works: references/bump-cascade.md in https://github.com/rokokol/ci-skill
+vendor-sync.sh rokokol/ci-skill templates/vendor-sync.sh 2fd1ba2e37b9a1938bee26e204751704de3ce620 1095262478484520267758a24b7ea9e057ca5204
+check-pins.sh rokokol/ci-skill templates/check-pins.sh 2fd1ba2e37b9a1938bee26e204751704de3ce620 c86f8288606d532f7982206eea8e8a310315d7f6
+.github/workflows/vendor-sync.yml rokokol/ci-skill templates/github/workflows/vendor-sync.yml 2fd1ba2e37b9a1938bee26e204751704de3ce620 a5bde77f98d55a43b2c993f4c96a952e0b68010d manual
+check-sh.sh rokokol/bash-best-practices-skill check-sh.sh 1045482d25b5f2ec63655c62a45ca3961317c00d 37cb4b54dc245288c711b9665c9b4aedc496b1ce
+check-skill.sh rokokol/skill-authoring-skill check-skill.sh 9f431bc8c3f5cbcba09363827c4ca81aec847b21 5d4d4103f7e936fa21736c4d6d14c3fb297e9995
+tests/t.sh rokokol/tests-skill t.sh 47a70e65a77bf5ffd39a5d90f2caefa669eb59fb 5f1f9f634b9d9c689592ec95a196c4734189eb14
+tests/markers/ rokokol/tests-skill markers/ 47a70e65a77bf5ffd39a5d90f2caefa669eb59fb 65d141bbf07ecb99a3bd6ebfe4e0d3050a2c1ab4
+check-prose.sh rokokol/create-readme-skill check-prose.sh 613639eb6ec2a73209bb1f7d1ba103e9d1c90db7 0438eca6ca155baf2b5fbbd8157747ec3619b579
+check-changelog.sh rokokol/versioning-skill check-changelog.sh 7b23556ab1c61272ba5ec30c94f91824644b3610 103e3395a394fe6d39b8d7e0989107d9aa01c2e8
+mail_agentd/server.py rokokol/telegram-skill tg_agentd/server.py dd56cfaed08bde3f18a9d7511f1275ddce1a62df d675b034888fdf68157c08e5d2ef78e67fdda7d3
+mail_agentd/hub.py rokokol/telegram-skill tg_agentd/hub.py dd56cfaed08bde3f18a9d7511f1275ddce1a62df d571d85d71f2a540e9bf69433ec82d37fff07f9d
+mail_agentd/media.py rokokol/telegram-skill tg_agentd/media.py dd56cfaed08bde3f18a9d7511f1275ddce1a62df f8a317f3bca1c0413e2190bf80b4edb1f3b41b73
+agentsock.py rokokol/telegram-skill agentsock.py dd56cfaed08bde3f18a9d7511f1275ddce1a62df 089c6a8bfee98a86ee28cd7cf69f06a352ec1dc4
