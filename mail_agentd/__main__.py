@@ -9,7 +9,7 @@ import ssl
 import sys
 from pathlib import Path
 
-from . import addresses, client, handler, hub, media, permissions, server, verbs
+from . import addresses, client, handler, hub, media, permissions, server, verbs, watch
 
 # A missing password or a mailbox that cannot be configured is a fault a restart cannot
 # fix. The unit stops on this code instead of waking every few seconds for as long as
@@ -126,7 +126,16 @@ async def run(options):
     boxes = mailboxes(options.mailboxes)
     store = permissions.Store(options.permissions)
     outbox = media.Outbox(options.media_dir) if options.media_dir else None
-    served = server.Server(handler.Handler(store, boxes, outbox=outbox, hub=hub.Hub()))
+    pushed = hub.Hub()
+    loop = asyncio.get_running_loop()
+
+    # The watchers run in threads, and the hub belongs to this loop, so a message crosses
+    # over by being scheduled here rather than published from the thread
+    def publish(key, event):
+        loop.call_soon_threadsafe(pushed.publish, key, event)
+
+    watchers = {name: watch.start(box, publish) for name, box in boxes.items()}
+    served = server.Server(handler.Handler(store, boxes, outbox=outbox, hub=pushed, watchers=watchers))
     inherited = server.inherited_socket()
     try:
         if inherited is not None:
@@ -136,6 +145,8 @@ async def run(options):
         else:
             _stop("no socket was passed and none was named")
     finally:
+        for watcher in watchers.values():
+            watcher.stop()
         for box in boxes.values():
             box.close()
 

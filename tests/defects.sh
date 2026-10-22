@@ -386,3 +386,37 @@ defect 'watch/reconnect' 'mail_agentd/watch.py' \
   '            except client.LOST:
                 return' \
   'one dropped connection ends the watch for good, and no new mail is announced until the service restarts'
+
+# Push. The watcher sees every message, so a subscription is held to the grant one by one
+defect 'push/ungranted' 'mail_agentd/handler.py' \
+  '                if not decision.allowed:
+                    continue' \
+  '                if False:
+                    continue' \
+  'the agent is told of every message that arrives, its sender and subject included, granted or not'
+
+defect 'push/recheck' 'mail_agentd/handler.py' \
+  '                    refusal = self._reads_anything(name)
+                    decision' \
+  '                    refusal = None
+                    decision' \
+  'withdrawing every read grant does not end a running subscription'
+
+defect 'push/needs-read' 'mail_agentd/handler.py' \
+  '            refusal = self._reads_anything(name)
+        except' \
+  '            refusal = None
+        except' \
+  'a mailbox with no read grant can be subscribed to, and the agent waits on a stream that will never carry anything'
+
+defect 'push/unsupported' 'mail_agentd/handler.py' \
+  '        if watcher is not None and watcher.unsupported:' \
+  '        if False:' \
+  'on a server without IDLE the agent waits for mail that is never pushed, with no word why'
+
+defect 'push/behind' 'mail_agentd/handler.py' \
+  '                except FellBehind:
+                    yield _refused(' \
+  '                except ZeroDivisionError:
+                    yield _refused(' \
+  'a subscriber that fell behind loses messages without being told, and never catches up'

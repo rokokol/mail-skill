@@ -17,6 +17,7 @@ import email
 import email.policy
 
 from . import addresses, client, compose, media, message, permissions, verbs
+from .hub import FellBehind
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
@@ -41,11 +42,12 @@ class UnknownMailbox(LookupError):
 class Handler:
     """Answers requests against one permission store and the configured mailboxes."""
 
-    def __init__(self, store, boxes, outbox=None, hub=None):
+    def __init__(self, store, boxes, outbox=None, hub=None, watchers=None):
         self._store = store
         self._boxes = boxes
         self._outbox = outbox
         self.hub = hub
+        self._watchers = watchers if watchers is not None else {}
         self._locks = {}
 
     async def handle(self, request):
@@ -100,6 +102,76 @@ class Handler:
         if box is None:
             raise UnknownMailbox(f"no mailbox is called {name!r}")
         return await perform(name, box, request)
+
+    async def stream(self, request):
+        """Answer a subscription: one answer for the grant, then one per new message.
+
+        The file is read again for every message. A message no rule reaches is passed
+        over in silence, since even its arrival is something the grant did not give. A
+        file that no longer grants read anywhere ends the stream, the way a withdrawn
+        permission should. The subscription is taken before the first answer, so nothing
+        that lands in between is lost.
+        """
+        try:
+            name = permissions.as_name(request.get("mailbox", ""))
+            box = self._boxes.get(name)
+            if box is None:
+                raise UnknownMailbox(f"no mailbox is called {name!r}")
+            refusal = self._reads_anything(name)
+        except (permissions.BadName, UnknownMailbox, permissions.PermissionFileError) as bad:
+            yield _refused(str(bad))
+            return
+        if refusal is not None:
+            yield refusal
+            return
+        watcher = self._watchers.get(name)
+        if watcher is not None and watcher.unsupported:
+            yield _refused(watcher.unsupported)
+            return
+        if self.hub is None:
+            yield _refused("this service holds no watch, so nothing is pushed")
+            return
+        subscription = self.hub.subscribe(name)
+        try:
+            yield _allowed("read", "subscribe", {"mailbox": name, "folder": "INBOX"})
+            while True:
+                try:
+                    arrived = await subscription.next()
+                except FellBehind:
+                    yield _refused(
+                        "this subscriber fell behind and missed messages; read from the "
+                        "last uid seen, then subscribe again"
+                    )
+                    return
+                if "uidvalidity_changed" in arrived:
+                    yield {"ok": True, **arrived}
+                    continue
+                try:
+                    refusal = self._reads_anything(name)
+                    decision = None if refusal else self.decide(self._store.grant(name), "read", arrived["header"], box)
+                except permissions.PermissionFileError as broken:
+                    refusal = _refused(str(broken))
+                if refusal is not None:
+                    yield refusal
+                    return
+                if not decision.allowed:
+                    continue
+                identity = _identity(name, arrived["folder"], arrived["uid"], arrived["uidvalidity"])
+                described = message.describe(arrived["header"], full=False, identity=identity)
+                described |= {"allowed_by": decision.by, "via": decision.via}
+                yield {"ok": True, "message": described}
+        finally:
+            self.hub.unsubscribe(name, subscription)
+
+    def _reads_anything(self, name):
+        """A refusal when no line of the mailbox's file grants read, else None."""
+        grant = self._store.grant(name)
+        if not grant.reads_anything():
+            return _refused(
+                f"mailbox {name} grants read on no address",
+                remedy=f"add read to an 'allow ADDRESS:' line in mailboxes/{name}.conf",
+            )
+        return None
 
     async def _call(self, name, command, *args, **kwargs):
         """Run one blocking command on a mailbox, one at a time per mailbox."""

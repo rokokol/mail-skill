@@ -67,6 +67,14 @@ class Grant:
     to_rules: list = field(default_factory=list)
     flags: dict = field(default_factory=dict)
 
+    def reads_anything(self):
+        """Whether any line of the file grants read, on any address."""
+        if verbs.granted("read", self.words, verbs.ACTIONS):
+            return True
+        return any(verbs.granted("read", w, verbs.ADDRESS_ACTIONS) for _, w in self.rules) or any(
+            verbs.granted("read", w, verbs.MESSAGE_ACTIONS) for _, w in self.to_rules
+        )
+
     def may_mailbox(self, action):
         if action not in verbs.MAILBOX_ACTIONS:
             raise ValueError(f"{action!r} is no mailbox action")

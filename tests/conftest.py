@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from mail_agentd import client, handler, media, permissions
+from mail_agentd import client, handler, hub, media, permissions
 from tests.fake_imap import FakeServer, FakeSMTP
 
 
@@ -17,7 +17,11 @@ class World:
         self.boxes = {}
         self.store = permissions.Store(root / "permissions")
         self.outbox = media.Outbox(root / "outbox")
-        self.handler = handler.Handler(self.store, self.boxes, outbox=self.outbox)
+        self.hub = hub.Hub()
+        self.watchers = {}
+        self.handler = handler.Handler(
+            self.store, self.boxes, outbox=self.outbox, hub=self.hub, watchers=self.watchers
+        )
 
     def mailbox(self, name, address, own=(), **fields):
         server = FakeServer()
