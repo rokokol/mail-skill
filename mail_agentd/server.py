@@ -20,6 +20,27 @@ SD_LISTEN_FDS_START = 3
 MAX_FILE = 50 * 1024 * 1024
 MAX_REQUEST = MAX_FILE * 4 // 3 + 1024 * 1024
 
+# What a caller hears when Telegram itself is gone. Telethon raises a bare
+# ConnectionError from a disconnected client, and that says nothing to an agent about
+# whether the request was wrong or the link was
+UNREACHABLE = "Telegram is unreachable: the service is reconnecting, ask again shortly"
+
+
+def refusal():
+    """The answer a caller gets while the link to Telegram is down."""
+    return {"ok": False, "error": UNREACHABLE}
+
+
+def _cancelled_from_outside():
+    """Whether this session was cancelled by its own task rather than by a request future.
+
+    Telethon cancels the futures of requests that were in flight when the link dropped,
+    and that cancellation reaches the handler as CancelledError. The task's own
+    cancellation, which is how the process shuts down, must not be turned into an answer
+    """
+    task = asyncio.current_task()
+    return task is not None and task.cancelling() > 0
+
 
 def inherited_socket():
     """The socket systemd passed, or None when the process was started on its own."""
@@ -51,23 +72,35 @@ class Server:
 
     async def _client(self, reader, writer):
         try:
-            async for line in reader:
+            while True:
+                try:
+                    line = await reader.readline()
+                except ValueError:
+                    # readline raises this for one thing only: a line that outgrew the
+                    # stream's limit. It clears the buffer past that line, so the
+                    # connection cannot continue, but the caller gets a reason rather
+                    # than an empty read. A fault anywhere else is left to speak for
+                    # itself instead of arriving here as a size complaint
+                    answer = {
+                        "ok": False,
+                        "error": f"request too large: a file may be at most {MAX_FILE} bytes",
+                    }
+                    writer.write(json.dumps(answer).encode() + b"\n")
+                    await writer.drain()
+                    return
+                if not line:
+                    return
                 request = await self._exchange(line, writer)
                 if request is not None:
                     # A subscription keeps the connection for itself until either end
                     # leaves, so nothing after it on this connection is a request
                     await self._stream(request, reader, writer)
                     return
-        except ValueError:
-            # The stream raises this when a line outgrows the limit. The rest of that
-            # line is still unread, so the connection cannot continue, but the caller
-            # gets a reason instead of an empty read
-            answer = {
-                "ok": False,
-                "error": f"request too large: a file may be at most {MAX_FILE} bytes",
-            }
-            writer.write(json.dumps(answer).encode() + b"\n")
-            await writer.drain()
+        except ConnectionError:
+            # A peer that leaves without reading its answers fails the writes still owed
+            # to it, reading included. The session ends there rather than at a fault, and
+            # the exception would otherwise reach the journal as a lost connection
+            return
         finally:
             writer.close()
 
@@ -83,7 +116,14 @@ class Server:
         else:
             if isinstance(request, dict) and request.get("action") == "subscribe":
                 return request
-            answer = await self._handler.handle(request)
+            try:
+                answer = await self._handler.handle(request)
+            except ConnectionError:
+                answer = refusal()
+            except asyncio.CancelledError:
+                if _cancelled_from_outside():
+                    raise
+                answer = refusal()
         writer.write(json.dumps(answer).encode() + b"\n")
         await writer.drain()
         return None
@@ -108,6 +148,15 @@ class Server:
                 try:
                     answer = following.result()
                 except StopAsyncIteration:
+                    return
+                except (ConnectionError, asyncio.CancelledError) as gone:
+                    # The stream ended because Telegram went away, not because the
+                    # subscriber left: the reason is worth a line before the socket closes
+                    if isinstance(gone, asyncio.CancelledError) and _cancelled_from_outside():
+                        raise
+                    answer = refusal()
+                    writer.write(json.dumps(answer).encode() + b"\n")
+                    await writer.drain()
                     return
                 writer.write(json.dumps(answer).encode() + b"\n")
                 await writer.drain()
