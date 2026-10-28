@@ -34,6 +34,7 @@ The service writes an attachment's bytes and never opens them, so unpacking an a
 
 ## What the answers say
 
+- **`--search` is the server's own `TEXT` search: a substring over headers and body alike, never a stem.** Ask for each stem as its own call, because a query built from the base form misses the inflected ones and the answer does not say it did. A plain listing examines at most the newest 500 matches and may stop earlier at `--limit`, reporting `more` when matches remain. To scan all matches, start with `--since-uid 0` and continue with `--since-uid scanned_to`: this walks from oldest to newest, not backwards from a plain listing
 - **An allowed action names the word and the line that allowed it.** When the word was the wildcard, the answer says so: one word standing for a whole table permitted it, and that distinction belongs in what you report
 - **A listing shows what the grant reaches and counts the rest under `withheld`.** Report it as covering what it covered, never as covering the folder, and say how many were held back
 - **A message is named by mailbox, folder, `uid` and `uidvalidity`.** Pass the `uidvalidity` back with the `uid`: a folder rebuilt since then is refused rather than acted on in the wrong place
